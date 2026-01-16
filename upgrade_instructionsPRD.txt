@@ -1,0 +1,48 @@
+Project Overview:
+AzureCheck is a modern web-based evolution of the legacy CLI proxy checker. It provides a sleek, browser-based dashboard for security researchers to paste raw proxy data, extract valid endpoints, and perform high-speed validation against a sky-blue themed interface.
+1. Aesthetic & UI Requirements
+Color Palette: "Azure Horizon" Theme.
+Primary: #007BFF (Sky Blue)
+Background: #F0F8FF (Alice Blue)
+Success: #28A745 (Emerald Green)
+Failure: #DC3545 (Crimson)
+Design Language: Modern Minimalism.
+Use of Glassmorphism for result cards (semi-transparent backgrounds with blur).
+Rounded corners (radius: 12px).
+Subtle drop shadows for depth.
+Typography: Sans-serif (Inter or Geist) for high readability.
+2. Core Functional Requirements
+Raw Input Area: A large, clean textarea that accepts any string. It must utilize the existing regex logic to find IP:PORT patterns within messy text.
+Live Dashboard:
+Total Counter: Number of proxies detected.
+Live Progress Bar: Real-time percentage of the test completion.
+Status Indicators: Categorized "Good" and "Bad" counts displayed in modern tiles.
+Validation Engine:
+Must use the Python ThreadPoolExecutor (40+ workers) on the backend for speed.
+Must verify both HTTP and HTTPS connectivity.
+Must report latency (seconds) and the resolved exit IP.
+Export Actions:
+"Copy Good" button: Instantly copies all working proxies to the clipboard in IP:PORT format.
+"Download CSV" option for full reports.
+3. Technical Architecture
+Frontend: React (Pure Functional Components) + Tailwind CSS.
+State management via useState and useEffect.
+Lucide-React icons for "Shield" (Proxy) and "Activity" (Latency) symbols.
+Backend: FastAPI (Python).
+FastAPI is selected for its high performance and native async support.
+Internal endpoint: /api/verify (POST) accepting a string.
+Communication: WebSockets or Long Polling to stream "Live" results to the UI as they complete (no waiting for the entire list to finish).
+4. Detailed User Flow
+Input: User lands on the Sky Blue homepage and pastes raw proxy text.
+Extraction: User clicks "Start Analysis." The UI instantly shows the count of extracted proxies.
+Real-Time Processing: Cards begin appearing in a grid.
+Azure Pulse: A pulsing blue animation indicates a proxy is currently being tested.
+Result: Cards flip or transition to Green (Good) or Red (Bad) once the server returns data.
+Completion: The UI presents a summary and the "Copy Working" button glows Azure.
+5. Implementation Constraints
+Zero Fluff: No login, no marketing, no secondary pages.
+Performance: The UI must handle up to 500 concurrent proxy cards without lag.
+Security: Backend must sanitize all input to prevent injection; timeout must be strictly enforced (12s) to prevent hanging sessions.
+
+The script already works and exists in the current working directory, you don't need to add any functionality, we simply want to upgrade it to be a web app.
+</artifact>

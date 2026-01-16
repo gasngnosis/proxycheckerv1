@@ -1,8 +1,8 @@
-# AzureCheck - Modern Proxy Validator
+# Auto List - Modern Proxy Validator
 
-![AzureCheck Logo](https://via.placeholder.com/150/007BFF/FFFFFF?text=AzureCheck)
+![Auto List Logo](https://via.placeholder.com/150/007BFF/FFFFFF?text=Auto+List)
 
-A modern web-based evolution of the legacy CLI proxy checker. AzureCheck provides a sleek, browser-based dashboard for security researchers to paste raw proxy data, extract valid endpoints, and perform high-speed validation.
+A modern web-based evolution of the legacy CLI proxy checker. Auto List provides a sleek, browser-based dashboard for security researchers to paste raw proxy data, extract valid endpoints, and perform high-speed validation.
 
 ## 🎨 Features
 
@@ -120,4 +120,4 @@ For questions or support, please open an issue on GitHub.
 
 ---
 
-**AzureCheck** - The modern way to validate proxies with style and speed! 🚀
+**Auto List** - The modern way to validate proxies with style and speed! 🚀

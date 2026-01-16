@@ -175,7 +175,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F0F8FF] p-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#007BFF] mb-6 text-center">AzureCheck Proxy Validator</h1>
+        <h1 className="text-3xl font-bold text-[#007BFF] mb-6 text-center">Auto List Proxy Validator</h1>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Paste Proxy Data</h2>

@@ -1,7 +1,7 @@
 {
-  "name": "azurecheck",
+  "name": "auto-list",
   "version": "1.0.0",
-  "description": "Modern web-based proxy checker",
+  "description": "Auto List - Modern web-based proxy checker and validator",
   "scripts": {
     "start": "concurrently \"npm run backend\" \"npm run frontend\"",
     "backend": "cd backend && python -m uvicorn main:app --reload",

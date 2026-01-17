@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Shield, Activity, Copy, Download, Check, X, Cloud, ArrowDown } from 'lucide-react'
+import { Shield, Activity, Copy, Download, Check, X, Cloud, ArrowDown, RefreshCw } from 'lucide-react'
 import axios from 'axios'
 
 function App() {
@@ -18,7 +18,20 @@ function App() {
   const [isFetchingCached, setIsFetchingCached] = useState(false)
   const [fetchError, setFetchError] = useState(null)
   const [showAnimation, setShowAnimation] = useState(false)
+  const [goodProxiesFromLastTest, setGoodProxiesFromLastTest] = useState([])
+  const [notifications, setNotifications] = useState([])
+  const [isRetesting, setIsRetesting] = useState(false)
   const websocketRef = useRef(null)
+
+  const showNotification = (message, type = 'info') => {
+    const id = Date.now()
+    setNotifications(prev => [...prev, { id, message, type }])
+
+    // Auto-remove notification after 5 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id))
+    }, 5000)
+  }
 
   const extractProxies = () => {
     // Simple regex to extract IP:PORT patterns
@@ -64,23 +77,23 @@ function App() {
         // Show success notification with pre-verified info
         setTimeout(() => {
           setShowAnimation(false)
-          alert(`✅ Loaded ${proxies.length} pre-verified working proxies!\n\nThese proxies have been tested on the server and are guaranteed to work. No browser testing needed!`)
+          showNotification(`✅ Loaded ${proxies.length} pre-verified working proxies! These proxies have been tested on the server and are guaranteed to work. No browser testing needed!`, 'success')
         }, 1000)
       } else {
         setShowAnimation(false)
-        alert('No pre-verified proxies available')
+        showNotification('No pre-verified proxies available', 'warning')
       }
     } catch (error) {
       setShowAnimation(false)
       console.error('Error in smart fill:', error)
-      alert('Error loading pre-verified proxies. Please try again.')
+      showNotification('Error loading pre-verified proxies. Please try again.', 'error')
     }
   }
 
   const handleTestProxies = async () => {
     const extractedProxies = extractProxies()
     if (extractedProxies.length === 0) {
-      alert('No valid proxies found in the input text')
+      showNotification('No valid proxies found in the input text', 'warning')
       return
     }
 
@@ -145,9 +158,14 @@ function App() {
         } else if (data.type === 'complete') {
           console.log('Proxy testing complete')
           setIsTesting(false)
+          setIsRetesting(false)
+          // Store good proxies from this test for potential retesting
+          const goodProxies = results.filter(r => r.success).map(r => r.proxy)
+          setGoodProxiesFromLastTest(goodProxies)
+          showNotification(`✅ Testing complete! Found ${goodProxies.length} good proxies`, 'success')
         } else if (data.type === 'error') {
           console.error('WebSocket error:', data.message)
-          alert('Error testing proxies: ' + data.message)
+          showNotification('Error testing proxies: ' + data.message, 'error')
           setIsTesting(false)
         }
       }
@@ -159,7 +177,7 @@ function App() {
 
       ws.onerror = async (error) => {
         console.error('WebSocket error:', error)
-        alert('WebSocket connection error. Falling back to HTTP.')
+        showNotification('WebSocket connection error. Falling back to HTTP.', 'warning')
         setIsTesting(false)
 
         // Fallback to HTTP if WebSocket fails
@@ -181,9 +199,13 @@ function App() {
             bad: badCount
           })
 
+          // Store good proxies from this test for potential retesting
+          const goodProxies = results.filter(r => r.success).map(r => r.proxy)
+          setGoodProxiesFromLastTest(goodProxies)
+
         } catch (error) {
           console.error('Error testing proxies:', error)
-          alert('Error testing proxies. Please check console for details.')
+          showNotification('Error testing proxies. Please check console for details.', 'error')
         } finally {
           setIsTesting(false)
           setProgress(100)
@@ -192,7 +214,7 @@ function App() {
 
     } catch (error) {
       console.error('Error connecting to WebSocket:', error)
-      alert('Error connecting to WebSocket. Please check console for details.')
+      showNotification('Error connecting to WebSocket. Please check console for details.', 'error')
       setIsTesting(false)
     }
   }
@@ -205,9 +227,36 @@ function App() {
 
     if (goodProxies) {
       navigator.clipboard.writeText(goodProxies)
-        .then(() => alert('Good proxies copied to clipboard!'))
-        .catch(() => alert('Failed to copy to clipboard'))
+        .then(() => showNotification('Good proxies copied to clipboard!', 'success'))
+        .catch(() => showNotification('Failed to copy to clipboard', 'error'))
     }
+  }
+
+  const copyGoodProxiesToTest = () => {
+    if (goodProxiesFromLastTest.length === 0) {
+      showNotification('No good proxies available from previous test', 'warning')
+      return false
+    }
+
+    // Format good proxies as one per line
+    const proxyText = goodProxiesFromLastTest.join('\n')
+    setInputText(proxyText)
+    showNotification(`✅ Copied ${goodProxiesFromLastTest.length} good proxies from previous test to test area`, 'success')
+    return true
+  }
+
+  const handleTestAgain = async () => {
+    const success = copyGoodProxiesToTest()
+    if (!success) return
+
+    // Set retesting flag
+    setIsRetesting(true)
+    showNotification(`🔄 Retesting ${goodProxiesFromLastTest.length} good proxies from previous test...`, 'info')
+
+    // Wait a moment for the UI to update
+    setTimeout(() => {
+      handleTestProxies()
+    }, 100)
   }
 
   const handleDownloadCSV = () => {
@@ -230,6 +279,22 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F0F8FF] p-4">
       <div className="max-w-6xl mx-auto">
+        {/* Notifications */}
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {notifications.map(notification => (
+            <div
+              key={notification.id}
+              className={`p-4 rounded-lg shadow-lg text-white max-w-sm animate-slide-in-right ${
+                notification.type === 'success' ? 'bg-green-600' :
+                notification.type === 'error' ? 'bg-red-600' :
+                notification.type === 'warning' ? 'bg-yellow-600' :
+                'bg-blue-600'
+              }`}
+            >
+              {notification.message}
+            </div>
+          ))}
+        </div>
         <h1 className="text-3xl font-bold text-[#007BFF] mb-6 text-center">Pre-Verified Proxy Manager</h1>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -292,7 +357,16 @@ function App() {
               disabled={isTesting || !inputText.trim()}
               className="flex-1 bg-[#007BFF] text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              {isTesting ? 'Testing...' : 'Test Proxies (Optional)'}
+              {isTesting ? (isRetesting ? 'Retesting...' : 'Testing...') : 'Test Proxies (Optional)'}
+            </button>
+
+            <button
+              onClick={handleTestAgain}
+              disabled={isTesting || goodProxiesFromLastTest.length === 0}
+              className="bg-[#FFC107] text-white py-3 px-6 rounded-lg hover:bg-yellow-600 transition-colors disabled:bg-yellow-300 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className="inline-block mr-2" size={16} />
+              Test Again ({goodProxiesFromLastTest.length})
             </button>
 
             <button
@@ -338,10 +412,19 @@ function App() {
 
             {isTesting && (
               <div className="mb-4">
-                <div className="text-sm text-gray-600 mb-2">Progress: {progress}%</div>
+                <div className="text-sm text-gray-600 mb-2 flex items-center">
+                  {isRetesting ? (
+                    <>
+                      <RefreshCw className="mr-2 text-[#FFC107] animate-spin" size={16} />
+                      Retesting Progress: {progress}%
+                    </>
+                  ) : (
+                    <>Progress: {progress}%</>
+                  )}
+                </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
                   <div
-                    className="bg-[#007BFF] h-4 rounded-full transition-all"
+                    className={`h-4 rounded-full transition-all ${isRetesting ? 'bg-[#FFC107]' : 'bg-[#007BFF]'}`}
                     style={{ width: `${progress}%` }}
                   ></div>
                 </div>

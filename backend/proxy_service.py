@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 # Constants
 PROXY_SCRAPE_API_URL = "https://api.proxyscrape.com/v4/free-proxy-list/get"
 GITHUB_PROXY_LIST_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
+SPEEDX_PROXY_LIST_URL = "https://raw.githubusercontent.com/TheSpeedX/SOCKS-List/master/http.txt"
 API_PARAMS = {
     "request": "get_proxies",
     "skip": 0,
@@ -77,6 +78,52 @@ def fetch_proxies_from_github() -> List[str]:
         )
     except Exception as e:
         logger.error(f"Unexpected error fetching GitHub proxies: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
+
+def fetch_proxies_from_speedx() -> List[str]:
+    """
+    Fetch proxies from TheSpeedX SOCKS List on GitHub.
+
+    Returns:
+        List[str]: List of proxy strings in ip:port format
+
+    Raises:
+        HTTPException: If SpeedX request fails
+    """
+    try:
+        logger.info("Fetching proxies from TheSpeedX SOCKS List")
+
+        response = requests.get(
+            SPEEDX_PROXY_LIST_URL,
+            timeout=REQUEST_TIMEOUT
+        )
+
+        response.raise_for_status()
+
+        # Get text content and split by lines
+        proxy_text = response.text
+        proxies = []
+
+        for line in proxy_text.split('\n'):
+            line = line.strip()
+            if line and ':' in line and '.' in line:
+                # Add http:// prefix to make it consistent with other sources
+                proxies.append(f"http://{line}")
+
+        logger.info(f"Successfully fetched {len(proxies)} proxies from TheSpeedX")
+        return proxies
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"TheSpeedX request failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"TheSpeedX request failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error fetching TheSpeedX proxies: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Unexpected error: {str(e)}"
@@ -259,6 +306,15 @@ def fetch_combined_proxies() -> List[str]:
     except Exception as e:
         errors.append(f"GitHub proxy list failed: {str(e)}")
         logger.error(f"GitHub proxy list failed: {str(e)}")
+
+    # Try to fetch from TheSpeedX SOCKS List
+    try:
+        speedx_proxies = fetch_proxies_from_speedx()
+        combined_proxies.extend(speedx_proxies)
+        logger.info(f"Added {len(speedx_proxies)} proxies from TheSpeedX")
+    except Exception as e:
+        errors.append(f"TheSpeedX proxy list failed: {str(e)}")
+        logger.error(f"TheSpeedX proxy list failed: {str(e)}")
 
     # Deduplicate proxies while preserving order
     seen = set()

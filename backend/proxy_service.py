@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 # Constants
 PROXY_SCRAPE_API_URL = "https://api.proxyscrape.com/v4/free-proxy-list/get"
+GITHUB_PROXY_LIST_URL = "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt"
 API_PARAMS = {
     "request": "get_proxies",
     "skip": 0,
@@ -34,6 +35,52 @@ proxy_cache = {
     "last_updated": None,
     "lock": threading.Lock()
 }
+
+def fetch_proxies_from_github() -> List[str]:
+    """
+    Fetch proxies from GitHub raw proxy list.
+
+    Returns:
+        List[str]: List of proxy strings in ip:port format
+
+    Raises:
+        HTTPException: If GitHub request fails
+    """
+    try:
+        logger.info("Fetching proxies from GitHub proxy list")
+
+        response = requests.get(
+            GITHUB_PROXY_LIST_URL,
+            timeout=REQUEST_TIMEOUT
+        )
+
+        response.raise_for_status()
+
+        # Get text content and split by lines
+        proxy_text = response.text
+        proxies = []
+
+        for line in proxy_text.split('\n'):
+            line = line.strip()
+            if line and ':' in line and '.' in line:
+                # Add http:// prefix to make it consistent with ProxyScrape format
+                proxies.append(f"http://{line}")
+
+        logger.info(f"Successfully fetched {len(proxies)} proxies from GitHub")
+        return proxies
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"GitHub request failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"GitHub request failed: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Unexpected error fetching GitHub proxies: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
 
 def fetch_proxies_from_api() -> List[str]:
     """
@@ -177,12 +224,56 @@ def initialize_cache():
 
     logger.info("Cache is invalid or empty, fetching fresh proxies")
     try:
-        proxies = fetch_proxies_from_api()
+        proxies = fetch_combined_proxies()
         update_cache(proxies)
     except Exception as e:
         logger.error(f"Failed to initialize cache: {str(e)}")
         # If initialization fails, we'll have an empty cache
         # This is acceptable as the background task will retry
+
+def fetch_combined_proxies() -> List[str]:
+    """
+    Fetch proxies from both ProxyScrape API and GitHub proxy list,
+    then combine and deduplicate them.
+
+    Returns:
+        List[str]: Combined list of unique proxy strings
+    """
+    combined_proxies = []
+    errors = []
+
+    # Try to fetch from ProxyScrape API
+    try:
+        api_proxies = fetch_proxies_from_api()
+        combined_proxies.extend(api_proxies)
+        logger.info(f"Added {len(api_proxies)} proxies from ProxyScrape API")
+    except Exception as e:
+        errors.append(f"ProxyScrape API failed: {str(e)}")
+        logger.error(f"ProxyScrape API failed: {str(e)}")
+
+    # Try to fetch from GitHub proxy list
+    try:
+        github_proxies = fetch_proxies_from_github()
+        combined_proxies.extend(github_proxies)
+        logger.info(f"Added {len(github_proxies)} proxies from GitHub")
+    except Exception as e:
+        errors.append(f"GitHub proxy list failed: {str(e)}")
+        logger.error(f"GitHub proxy list failed: {str(e)}")
+
+    # Deduplicate proxies while preserving order
+    seen = set()
+    unique_proxies = []
+    for proxy in combined_proxies:
+        if proxy not in seen:
+            seen.add(proxy)
+            unique_proxies.append(proxy)
+
+    logger.info(f"Combined {len(unique_proxies)} unique proxies from {len(combined_proxies)} total proxies")
+
+    if errors:
+        logger.warning(f"Some proxy sources failed: {', '.join(errors)}")
+
+    return unique_proxies
 
 def refresh_cache_background():
     """
@@ -191,7 +282,7 @@ def refresh_cache_background():
     logger.info("Starting background cache refresh")
 
     try:
-        proxies = fetch_proxies_from_api()
+        proxies = fetch_combined_proxies()
         update_cache(proxies)
         logger.info("Background cache refresh completed successfully")
     except Exception as e:
@@ -224,12 +315,12 @@ def manual_refresh():
         Dict[str, Any]: Result of the refresh operation
     """
     try:
-        proxies = fetch_proxies_from_api()
+        proxies = fetch_combined_proxies()
         update_cache(proxies)
 
         return {
             "success": True,
-            "message": "Cache refreshed successfully",
+            "message": "Cache refreshed successfully with combined sources",
             "proxy_count": len(proxies),
             "timestamp": datetime.utcnow().isoformat()
         }

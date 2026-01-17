@@ -349,7 +349,7 @@ function App() {
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Validation Results</h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {results.map((result, index) => (
+              {[...results].sort((a, b) => b.success - a.success).map((result, index) => (
                 <div
                   key={index}
                   className={`p-4 rounded-lg ${result.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}

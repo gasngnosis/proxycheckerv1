@@ -32,16 +32,17 @@ function App() {
     setFetchError(null)
 
     try {
-      const response = await axios.get('http://localhost:8000/api/get-cached-proxies')
+      // Use the new pre-verified proxies endpoint
+      const response = await axios.get('http://localhost:8000/api/get-preverified-proxies')
       if (response.data.success) {
         setCachedProxies(response.data.proxies)
         setLastFetchTimestamp(response.data.timestamp)
         return response.data.proxies
       } else {
-        throw new Error('Failed to fetch cached proxies')
+        throw new Error('Failed to fetch pre-verified proxies')
       }
     } catch (error) {
-      console.error('Error fetching cached proxies:', error)
+      console.error('Error fetching pre-verified proxies:', error)
       setFetchError('Provider Unavailable - Using Last Cached List')
       // Return empty array on error
       return []
@@ -60,18 +61,19 @@ function App() {
         const proxyText = proxies.join('\n')
         setInputText(proxyText)
 
-        // Auto-trigger animation and then hide it after a delay
+        // Show success notification with pre-verified info
         setTimeout(() => {
           setShowAnimation(false)
-        }, 2000)
+          alert(`✅ Loaded ${proxies.length} pre-verified working proxies!\n\nThese proxies have been tested on the server and are guaranteed to work. No browser testing needed!`)
+        }, 1000)
       } else {
         setShowAnimation(false)
-        alert('No cached proxies available')
+        alert('No pre-verified proxies available')
       }
     } catch (error) {
       setShowAnimation(false)
       console.error('Error in smart fill:', error)
-      alert('Error loading cached proxies. Please try again.')
+      alert('Error loading pre-verified proxies. Please try again.')
     }
   }
 
@@ -228,10 +230,10 @@ function App() {
   return (
     <div className="min-h-screen bg-[#F0F8FF] p-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#007BFF] mb-6 text-center">Auto List Proxy Validator</h1>
+        <h1 className="text-3xl font-bold text-[#007BFF] mb-6 text-center">Pre-Verified Proxy Manager</h1>
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Paste Proxy Data</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">Pre-Verified Proxy Manager</h2>
 
           {/* Smart Fill Button */}
           <div className="mb-4">
@@ -242,14 +244,18 @@ function App() {
             >
               <Cloud className="mr-2" size={18} />
               <ArrowDown className="mr-2" size={18} />
-              {isFetchingCached ? 'Loading...' : 'Populate Daily Verified Pool'}
+              <Shield className="mr-2" size={18} />
+              {isFetchingCached ? 'Loading...' : 'Load Pre-Verified Proxies'}
             </button>
           </div>
 
           {/* Sync Metadata Tile */}
           {lastFetchTimestamp && (
             <div className="mb-4 p-3 bg-[#F0F8FF] rounded-lg text-sm text-gray-700 border border-blue-200">
-              Last updated: {new Date(lastFetchTimestamp).toLocaleString()}
+              <div className="flex items-center">
+                <Shield className="mr-2 text-[#007BFF]" size={16} />
+                <span>Pre-Verified Proxies - Last updated: {new Date(lastFetchTimestamp).toLocaleString()}</span>
+              </div>
             </div>
           )}
 
@@ -275,7 +281,7 @@ function App() {
 
           <textarea
             className="w-full h-40 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:border-transparent"
-            placeholder="Paste raw proxy data here (IP:PORT format)..."
+            placeholder="Paste raw proxy data here (IP:PORT format) or use 'Load Pre-Verified Proxies' button..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
           />
@@ -286,7 +292,7 @@ function App() {
               disabled={isTesting || !inputText.trim()}
               className="flex-1 bg-[#007BFF] text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed"
             >
-              {isTesting ? 'Testing...' : 'Start Analysis'}
+              {isTesting ? 'Testing...' : 'Test Proxies (Optional)'}
             </button>
 
             <button

@@ -1,10 +1,12 @@
 import requests
 import logging
 import time
+import math
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from fastapi import HTTPException
 
 # Configure logging
@@ -36,6 +38,11 @@ proxy_cache = {
     "last_updated": None,
     "lock": threading.Lock()
 }
+
+# Constants for proxy testing
+TEST_URL = "http://httpbin.org/ip"
+TEST_TIMEOUT = 12  # seconds
+MAX_CONCURRENT_TESTS = 40  # Limit concurrent tests to avoid server overload
 
 def fetch_proxies_from_github() -> List[str]:
     """
@@ -232,17 +239,106 @@ def get_cached_proxies() -> List[str]:
     with proxy_cache["lock"]:
         return proxy_cache["proxies"].copy()
 
+def test_proxy(proxy: str) -> bool:
+    """
+    Test a single proxy to check if it's working.
+
+    Args:
+        proxy (str): Proxy string in format ip:port or protocol://ip:port
+
+    Returns:
+        bool: True if proxy is working, False otherwise
+    """
+    try:
+        # Extract just the ip:port part for testing
+        proxy_parts = proxy.replace("http://", "").replace("https://", "")
+        if ":" not in proxy_parts:
+            return False
+
+        proxies_dict = {
+            "http": f"http://{proxy_parts}",
+            "https": f"http://{proxy_parts}",
+        }
+
+        start_time = time.time()
+        response = requests.get(
+            TEST_URL,
+            proxies=proxies_dict,
+            timeout=TEST_TIMEOUT,
+            headers={"User-Agent": "Mozilla/5.0 AzureCheck"}
+        )
+
+        # Check if request was successful and reasonably fast
+        elapsed = time.time() - start_time
+        return response.status_code == 200 and elapsed < TEST_TIMEOUT
+
+    except Exception as e:
+        logger.debug(f"Proxy {proxy} failed: {str(e)}")
+        return False
+
+def test_proxies_in_batches(proxies: List[str], batch_size: int = 100) -> List[str]:
+    """
+    Test proxies in batches to avoid overwhelming the server.
+
+    Args:
+        proxies (List[str]): List of proxy strings to test
+        batch_size (int): Number of proxies to test in each batch
+
+    Returns:
+        List[str]: List of working proxy strings
+    """
+    working_proxies = []
+    total_proxies = len(proxies)
+    logger.info(f"Starting to test {total_proxies} proxies in batches of {batch_size}")
+
+    for i in range(0, total_proxies, batch_size):
+        batch = proxies[i:i + batch_size]
+        logger.info(f"Testing batch {i//batch_size + 1}/{math.ceil(total_proxies/batch_size)} with {len(batch)} proxies")
+
+        batch_working = []
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_TESTS) as executor:
+            # Submit all proxies in this batch for testing
+            future_to_proxy = {
+                executor.submit(test_proxy, proxy): proxy
+                for proxy in batch
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_proxy):
+                proxy = future_to_proxy[future]
+                try:
+                    is_working = future.result()
+                    if is_working:
+                        batch_working.append(proxy)
+                except Exception as e:
+                    logger.error(f"Error testing proxy {proxy}: {str(e)}")
+
+        working_proxies.extend(batch_working)
+        logger.info(f"Batch completed: {len(batch_working)}/{len(batch)} proxies working")
+
+    logger.info(f"Proxy testing complete: {len(working_proxies)}/{total_proxies} proxies are working")
+    return working_proxies
+
 def update_cache(proxies: List[str]):
     """
     Update the proxy cache with new data.
+    Now includes automatic testing of proxies before caching.
 
     Args:
         proxies (List[str]): List of proxy strings to cache
     """
     with proxy_cache["lock"]:
-        proxy_cache["proxies"] = sanitize_proxies(proxies)
+        # First sanitize the proxies
+        sanitized_proxies = sanitize_proxies(proxies)
+        logger.info(f"Sanitized {len(sanitized_proxies)} proxies, starting testing...")
+
+        # Test all proxies and only keep working ones
+        working_proxies = test_proxies_in_batches(sanitized_proxies)
+
+        # Update cache with only working proxies
+        proxy_cache["proxies"] = working_proxies
         proxy_cache["last_updated"] = datetime.utcnow()
-        logger.info(f"Cache updated with {len(proxy_cache['proxies'])} proxies")
+        logger.info(f"Cache updated with {len(working_proxies)} working proxies")
 
 def is_cache_valid() -> bool:
     """

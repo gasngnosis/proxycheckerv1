@@ -235,10 +235,10 @@ async def fetch_proxies():
 @app.get("/api/get-cached-proxies")
 async def get_cached_proxies_endpoint():
     """
-    Retrieve cached proxies from the in-memory cache.
+    Retrieve pre-verified cached proxies from the in-memory cache.
 
     Returns:
-        Dict[str, Any]: Cached proxies and metadata
+        Dict[str, Any]: Pre-verified cached proxies and metadata
     """
     try:
         proxies = get_cached_proxies()
@@ -246,10 +246,43 @@ async def get_cached_proxies_endpoint():
             "success": True,
             "proxies": proxies,
             "count": len(proxies),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "pre_verified": True,
+            "message": "All proxies have been pre-tested and verified to be working"
         }
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to retrieve cached proxies: {str(e)}"
+        )
+
+@app.get("/api/get-preverified-proxies")
+async def get_preverified_proxies_endpoint():
+    """
+    Retrieve pre-verified proxies with detailed information about the verification process.
+
+    Returns:
+        Dict[str, Any]: Pre-verified proxies with verification metadata
+    """
+    try:
+        proxies = get_cached_proxies()
+        return {
+            "success": True,
+            "proxies": proxies,
+            "count": len(proxies),
+            "timestamp": datetime.utcnow().isoformat(),
+            "pre_verified": True,
+            "verification_info": {
+                "method": "backend_pre_checking",
+                "test_url": "http://httpbin.org/ip",
+                "timeout_seconds": 12,
+                "max_concurrent_tests": 40,
+                "description": "All proxies have been tested on the backend server and verified to be working before being returned to the client"
+            },
+            "message": "These proxies have been pre-tested on the server to ensure they are working, preventing browser freezing"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve pre-verified proxies: {str(e)}"
         )

@@ -32,7 +32,7 @@ function App() {
     setFetchError(null)
 
     try {
-      const response = await axios.get('http://localhost:8001/api/get-cached-proxies')
+      const response = await axios.get('http://localhost:8000/api/get-cached-proxies')
       if (response.data.success) {
         setCachedProxies(response.data.proxies)
         setLastFetchTimestamp(response.data.timestamp)
@@ -99,7 +99,7 @@ function App() {
 
     try {
       // Connect to WebSocket
-      const ws = new WebSocket('ws://localhost:8001/ws/verify')
+      const ws = new WebSocket('ws://localhost:8000/ws/verify')
       websocketRef.current = ws
 
       ws.onopen = () => {
@@ -162,7 +162,7 @@ function App() {
 
         // Fallback to HTTP if WebSocket fails
         try {
-          const response = await axios.post('http://localhost:8001/api/verify', {
+          const response = await axios.post('http://localhost:8000/api/verify', {
             text: inputText
           })
 

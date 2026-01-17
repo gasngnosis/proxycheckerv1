@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Shield, Activity, Copy, Download, Check, X } from 'lucide-react'
+import { Shield, Activity, Copy, Download, Check, X, Cloud, ArrowDown } from 'lucide-react'
 import axios from 'axios'
 
 function App() {
@@ -13,6 +13,11 @@ function App() {
     good: 0,
     bad: 0
   })
+  const [cachedProxies, setCachedProxies] = useState([])
+  const [lastFetchTimestamp, setLastFetchTimestamp] = useState(null)
+  const [isFetchingCached, setIsFetchingCached] = useState(false)
+  const [fetchError, setFetchError] = useState(null)
+  const [showAnimation, setShowAnimation] = useState(false)
   const websocketRef = useRef(null)
 
   const extractProxies = () => {
@@ -20,6 +25,54 @@ function App() {
     const pattern = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,5})/g
     const matches = inputText.match(pattern) || []
     return matches
+  }
+
+  const fetchCachedProxies = async () => {
+    setIsFetchingCached(true)
+    setFetchError(null)
+
+    try {
+      const response = await axios.get('http://localhost:8001/api/get-cached-proxies')
+      if (response.data.success) {
+        setCachedProxies(response.data.proxies)
+        setLastFetchTimestamp(response.data.timestamp)
+        return response.data.proxies
+      } else {
+        throw new Error('Failed to fetch cached proxies')
+      }
+    } catch (error) {
+      console.error('Error fetching cached proxies:', error)
+      setFetchError('Provider Unavailable - Using Last Cached List')
+      // Return empty array on error
+      return []
+    } finally {
+      setIsFetchingCached(false)
+    }
+  }
+
+  const handleSmartFill = async () => {
+    setShowAnimation(true)
+
+    try {
+      const proxies = await fetchCachedProxies()
+      if (proxies && proxies.length > 0) {
+        // Format proxies as one per line
+        const proxyText = proxies.join('\n')
+        setInputText(proxyText)
+
+        // Auto-trigger animation and then hide it after a delay
+        setTimeout(() => {
+          setShowAnimation(false)
+        }, 2000)
+      } else {
+        setShowAnimation(false)
+        alert('No cached proxies available')
+      }
+    } catch (error) {
+      setShowAnimation(false)
+      console.error('Error in smart fill:', error)
+      alert('Error loading cached proxies. Please try again.')
+    }
   }
 
   const handleTestProxies = async () => {
@@ -46,7 +99,7 @@ function App() {
 
     try {
       // Connect to WebSocket
-      const ws = new WebSocket('ws://localhost:8000/ws/verify')
+      const ws = new WebSocket('ws://localhost:8001/ws/verify')
       websocketRef.current = ws
 
       ws.onopen = () => {
@@ -109,7 +162,7 @@ function App() {
 
         // Fallback to HTTP if WebSocket fails
         try {
-          const response = await axios.post('http://localhost:8000/api/verify', {
+          const response = await axios.post('http://localhost:8001/api/verify', {
             text: inputText
           })
 
@@ -179,6 +232,47 @@ function App() {
 
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-800 mb-4">Paste Proxy Data</h2>
+
+          {/* Smart Fill Button */}
+          <div className="mb-4">
+            <button
+              onClick={handleSmartFill}
+              disabled={isFetchingCached}
+              className="w-full bg-[#007BFF] text-white py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 disabled:cursor-not-allowed flex items-center justify-center"
+            >
+              <Cloud className="mr-2" size={18} />
+              <ArrowDown className="mr-2" size={18} />
+              {isFetchingCached ? 'Loading...' : 'Populate Daily Verified Pool'}
+            </button>
+          </div>
+
+          {/* Sync Metadata Tile */}
+          {lastFetchTimestamp && (
+            <div className="mb-4 p-3 bg-[#F0F8FF] rounded-lg text-sm text-gray-700 border border-blue-200">
+              Last updated: {new Date(lastFetchTimestamp).toLocaleString()}
+            </div>
+          )}
+
+          {/* Error Feedback */}
+          {fetchError && (
+            <div className="mb-4 p-3 bg-yellow-100 rounded-lg text-sm text-yellow-800 border border-yellow-300">
+              {fetchError}
+            </div>
+          )}
+
+          {/* Glassmorphism Animation Overlay */}
+          {showAnimation && (
+            <div className="fixed inset-0 flex items-center justify-center z-50">
+              <div className="absolute inset-0 bg-black bg-opacity-20 backdrop-blur-sm"></div>
+              <div className="relative bg-white bg-opacity-80 backdrop-blur-lg p-6 rounded-lg shadow-xl max-w-md">
+                <div className="text-center">
+                  <div className="text-[#007BFF] text-lg font-semibold mb-2">Loading Proxies...</div>
+                  <div className="text-gray-600">Populating from verified cache</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <textarea
             className="w-full h-40 p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-[#007BFF] focus:border-transparent"
             placeholder="Paste raw proxy data here (IP:PORT format)..."

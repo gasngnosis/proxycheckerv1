@@ -8,6 +8,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
 import json
 import asyncio
+import threading
+from datetime import datetime
+
+# Import proxy service
+from proxy_service import (
+    initialize_cache,
+    start_background_task,
+    get_cached_proxies,
+    manual_refresh
+)
 
 app = FastAPI()
 
@@ -22,6 +32,21 @@ app.add_middleware(
 
 # Store active WebSocket connections
 active_connections = []
+
+# Global variable to store background task timer
+background_task_timer = None
+
+# Initialize proxy cache on startup
+@app.on_event("startup")
+async def startup_event():
+    """Initialize proxy cache and start background refresh task"""
+    global background_task_timer
+
+    # Initialize cache
+    initialize_cache()
+
+    # Start background refresh task (24-hour interval)
+    background_task_timer = start_background_task()
 
 # Configuration
 TIMEOUT = 12
@@ -189,3 +214,42 @@ async def websocket_verify(websocket: WebSocket):
 @app.get("/")
 async def root():
     return {"message": "AzureCheck Proxy Verification API"}
+
+@app.get("/api/fetch-proxies")
+async def fetch_proxies():
+    """
+    Manual trigger endpoint to fetch fresh proxies from ProxyScrape API.
+
+    Returns:
+        Dict[str, Any]: Result of the fetch operation
+    """
+    try:
+        result = manual_refresh()
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to fetch proxies: {str(e)}"
+        )
+
+@app.get("/api/get-cached-proxies")
+async def get_cached_proxies_endpoint():
+    """
+    Retrieve cached proxies from the in-memory cache.
+
+    Returns:
+        Dict[str, Any]: Cached proxies and metadata
+    """
+    try:
+        proxies = get_cached_proxies()
+        return {
+            "success": True,
+            "proxies": proxies,
+            "count": len(proxies),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve cached proxies: {str(e)}"
+        )
